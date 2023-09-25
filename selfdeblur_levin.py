@@ -28,6 +28,8 @@ parser.add_argument('--save_frequency', type=int, default=100, help='lfrequency 
 opt = parser.parse_args()
 #print(opt)
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '1,2,3'
+
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark =True
 dtype = torch.cuda.FloatTensor
@@ -148,12 +150,14 @@ for f in files_source:
             out_x_np = torch_to_np(out_x)
             out_x_np = out_x_np.squeeze()
             out_x_np = out_x_np[padh//2:padh//2+img_size[1], padw//2:padw//2+img_size[2]]
+            out_x_np = np.clip(out_x_np * 255, 0, 255).astype(np.uint8)
             imsave(save_path, out_x_np)
 
             save_path = os.path.join(opt.save_path, '%s_k.png'%imgname)
             out_k_np = torch_to_np(out_k_m)
             out_k_np = out_k_np.squeeze()
             out_k_np /= np.max(out_k_np)
+            out_k_np = np.clip(out_k_np * 255, 0, 255).astype(np.uint8)
             imsave(save_path, out_k_np)
 
             torch.save(net, os.path.join(opt.save_path, "%s_xnet.pth" % imgname))
