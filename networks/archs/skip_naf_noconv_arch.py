@@ -163,26 +163,27 @@ class NAFNetNC(nn.Module):
 
     def forward(self, inp):
         B, C, H, W = inp.shape
-        inp = self.check_image_size(inp)    # inp after check_image_size: [1, 8, 288, 288]
+        inp = self.check_image_size(inp)
 
-        x = self.intro(inp) # x: [1, 32, 288, 288]
+        x = self.intro(inp)
 
         encs = []
 
         for encoder, down in zip(self.encoders, self.downs):
             x = encoder(x)
             encs.append(x)
-            x = down(x) # [288, 288] -> [144, 144] -> [72, 72] -> [36, 36] -> [18, 18]
+            x = down(x)
         
-        x = self.middle_blks(x) # [18, 18]
+        x = self.middle_blks(x)
 
         for decoder, up, enc_skip in zip(self.decoders, self.ups, encs[::-1]):
-            x = up(x)   # [18, 18] -> [36, 36] -> [72, 72] -> [144, 144] -> [288, 288]
+            x = up(x)
             x = x + enc_skip
             x = decoder(x)
         
         x = self.ending(x)
-        x = x + inp
+        # input이 noise 이므로, 마지막에 input을 더해주게 되면 악영향 미칠 것임
+        # x = x + inp   
 
         return x[:, :, :H, :W]
 
