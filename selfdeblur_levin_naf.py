@@ -19,16 +19,12 @@ from utils.common_utils import *
 from SSIM import SSIM
 from copy import deepcopy
 
+from networks.optims import setup_optimizers
+
 from networks.archs import define_network
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, default='naf.yml', help='path to config yml file')
-# parser.add_argument('--num_iter', type=int, default=5000, help='number of epochs of training')
-# parser.add_argument('--img_size', type=int, default=[256, 256], help='size of each image dimension')
-# parser.add_argument('--kernel_size', type=int, default=[21, 21], help='size of blur kernel [height, width]')
-# parser.add_argument('--data_path', type=str, default="datasets/levin/", help='path to blurry image')
-# parser.add_argument('--save_path', type=str, default="results/levin_naf_test", help='path to save results')
-# parser.add_argument('--save_frequency', type=int, default=100, help='lfrequency to save results')
 args = parser.parse_args()
 
 # load config yml file
@@ -126,12 +122,8 @@ for f in files_source:
     ssim = SSIM().type(dtype)
 
     # optimizer
-    # optimizer = torch.optim.Adam([{'params':net.parameters()},{'params':net_kernel.parameters(),'lr':1e-4}], lr=LR)
-    LR = opt['train']['optim']['lr']
-    LR_ker = opt['train']['optim']['ker_lr']
-    weight_decay = opt['train']['optim']['weight_decay']
-    betas = opt['train']['optim']['betas']
-    optimizer = torch.optim.AdamW([{'params':net.parameters()},{'params':net_kernel.parameters(), 'lr': LR_ker}], lr=LR, weight_decay=weight_decay, betas=betas)
+    optim_params = [net.parameters(), net_kernel.parameters()]
+    optimizer = setup_optimizers(optim_params, deepcopy(opt['train']['optim']))
     scheduler = MultiStepLR(optimizer, milestones=[2000, 3000, 4000], gamma=0.5)  # learning rates
 
     # initilization inputs
