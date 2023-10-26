@@ -1,12 +1,8 @@
-import matplotlib.pyplot as plt
 import argparse
 import os
 import numpy as np
-import yaml
-# from networks.skip import skip
-# from networks.skip_naf import NAFNet, NAFNetLocal
-# from networks.fcn import fcn
 import cv2
+import yaml
 import torch
 import torch.optim
 import glob
@@ -31,7 +27,6 @@ args = parser.parse_args()
 args.config = f'config/{args.config}'
 with open(args.config) as f:
     opt = yaml.load(f, Loader=yaml.FullLoader)
-#print(opt)
 
 # visible gpu
 os.environ['CUDA_VISIBLE_DEVICES'] = str(opt['gpu'])
@@ -95,13 +90,6 @@ for f in files_source:
 
     net_input = get_noise(input_depth, INPUT, (opt['img_size'][0], opt['img_size'][1])).type(dtype)
 
-    # net = skip( input_depth, 1,
-    #             num_channels_down = [128, 128, 128, 128, 128],
-    #             num_channels_up   = [128, 128, 128, 128, 128],
-    #             num_channels_skip = [16, 16, 16, 16, 16],
-    #             upsample_mode='bilinear',
-    #             need_sigmoid=True, need_bias=True, pad=pad, act_fun='LeakyReLU')
-    
     net = define_network(deepcopy(opt['network_x']))
     net = net.type(dtype)
 
@@ -112,7 +100,6 @@ for f in files_source:
     net_input_kernel = get_noise(n_k, INPUT, (1, 1)).type(dtype)
     net_input_kernel.squeeze_()
 
-    # net_kernel = fcn(n_k, opt['kernel_size'][0]*opt['kernel_size'][1])
     opt['network_k']['num_output_channels'] = opt['kernel_size'][0] * opt['kernel_size'][1]
     net_kernel = define_network(deepcopy(opt['network_k']))
     net_kernel = net_kernel.type(dtype)
@@ -131,6 +118,9 @@ for f in files_source:
     net_input_kernel_saved = net_input_kernel.detach().clone()
 
     ### start SelfDeblur
+    img_frame_array = []
+    ker_frame_array = []
+    fps = 10
     for step in tqdm(range(num_iter)):
 
         # input regularization
@@ -147,16 +137,15 @@ for f in files_source:
         out_k_m = out_k.view(-1,1,opt['kernel_size'][0],opt['kernel_size'][1])
         out_y = nn.functional.conv2d(out_x, out_k_m, padding=0, bias=None)
 
-        if step < 1000:
+        if step < 1000:     # TODO: 여기도 튜닝해야 함
             total_loss = mse(out_y,y) 
         else:
-            total_loss = 1-ssim(out_y, y) 
+            total_loss = 1-ssim(out_y, y)
 
         total_loss.backward()
         optimizer.step()
 
         if (step+1) % opt['save_frequency'] == 0:
-            #print('Iteration %05d' %(step+1))
 
             save_path = os.path.join(opt['save_path'], '%s_x.png'%imgname)
             out_x_np = torch_to_np(out_x)
@@ -174,3 +163,25 @@ for f in files_source:
 
             torch.save(net, os.path.join(opt['save_path'], "%s_xnet.pth" % imgname))
             torch.save(net_kernel, os.path.join(opt['save_path'], "%s_knet.pth" % imgname))
+
+            # Save video frames for x and k
+            img_frame_array.append(out_x_np)
+            ker_frame_array.append(out_k_np)
+    
+    # Save video
+    out_img = cv2.VideoWriter(
+        filename=os.path.join(opt['save_path'], '%s.avi' % imgname),
+        fourcc=cv2.VideoWriter_fourcc(*'DIVX'),
+        fps=fps, 
+        frameSize=(765, 765),
+        isColor=False
+    )
+
+    for i in range(len(img_frame_array)):
+        img = cv2.resize(img_frame_array[i], dsize=(0, 0), fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
+        ker = cv2.resize(ker_frame_array[i], dsize=(0, 0), fx=10, fy=10, interpolation=cv2.INTER_NEAREST)
+        h, w = ker.shape
+        img[:h+5, :w+5] = 255
+        img[:h, :w] = ker
+        out_img.write(img)
+    out_img.release()
