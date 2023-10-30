@@ -16,8 +16,8 @@ from SSIM import SSIM
 from copy import deepcopy
 
 from networks.optims import setup_optimizers
-
 from networks.archs import define_network
+from networks.losses import get_loss, TVLoss
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, default='naf.yml', help='path to config yml file')
@@ -105,8 +105,13 @@ for f in files_source:
     net_kernel = net_kernel.type(dtype)
 
     # Losses
-    mse = torch.nn.MSELoss().type(dtype)
-    ssim = SSIM().type(dtype)
+    loss_dict = {}
+    loss_dict['mse'] = torch.nn.MSELoss().type(dtype)
+    loss_dict['ssim'] = SSIM().type(dtype)
+    loss_dict['tv'] = TVLoss()
+    # mse = torch.nn.MSELoss().type(dtype)
+    # ssim = SSIM().type(dtype)
+    # tv = TVLoss()
 
     # optimizer
     optim_params = [net.parameters(), net_kernel.parameters()]
@@ -137,11 +142,7 @@ for f in files_source:
         out_k_m = out_k.view(-1,1,opt['kernel_size'][0],opt['kernel_size'][1])
         out_y = nn.functional.conv2d(out_x, out_k_m, padding=0, bias=None)
 
-        if step < 1000:     # TODO: 여기도 튜닝해야 함
-            total_loss = mse(out_y,y) 
-        else:
-            total_loss = 1-ssim(out_y, y)
-
+        total_loss = get_loss(out_y, y, step, loss_dict, deepcopy(opt))
         total_loss.backward()
         optimizer.step()
 

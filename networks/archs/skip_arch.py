@@ -117,7 +117,7 @@ class SkipUNet(nn.Module):
         for num_channel_down, kernel_size_down, num_channel_skip, kernel_size_skip in zip(num_channels_down, kernel_sizes_down, num_channels_skip, kernel_sizes_skip):
             self.downs.append(DownSampleBlock(in_channels, num_channel_down, kernel_size_down, non_local_block=not first))
             in_channels = num_channel_down
-            self.skips.append(SkipBlock(in_channels, num_channel_skip, kernel_size_skip))
+            self.skips.append(SkipBlock(in_channels, num_channel_skip, kernel_size_skip) if num_channel_skip != 0 else nn.Identity())
             first = False
         
         # up
@@ -126,10 +126,17 @@ class SkipUNet(nn.Module):
             kernel_size_up = kernel_sizes_up[-n-1]
             num_channel_skip = 0
             if n == 0:
-                self.ups.append(UpSampleBlock(num_channels_skip[-1], num_channel_up, kernel_size_up))
+                if num_channels_skip[-1] != 0:
+                    self.ups.append(UpSampleBlock(num_channels_skip[-1], num_channel_up, kernel_size_up))
+                else:
+                    self.ups.append(UpSampleBlock(num_channels_down[-1], num_channel_up, kernel_size_up))
             else:
                 num_channel_skip = num_channels_skip[-n-1]
-                self.ups.append(UpSampleBlock(num_channel_up + num_channel_skip, num_channel_up, kernel_size_up))
+                if num_channel_skip != 0:
+                    self.ups.append(UpSampleBlock(num_channel_up + num_channel_skip, num_channel_up, kernel_size_up))
+                else:
+                    num_channel_down = num_channels_down[-n-1]
+                    self.ups.append(UpSampleBlock(num_channel_up + num_channel_down, num_channel_up, kernel_size_up))
 
     def forward(self, inp):
         
