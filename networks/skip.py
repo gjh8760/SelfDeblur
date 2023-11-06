@@ -71,8 +71,8 @@ def skip(
         deeper.add(conv(input_depth, num_channels_down[i], filter_size_down[i], 2, bias=need_bias, pad=pad, downsample_mode=downsample_mode[i]))
         deeper.add(bn(num_channels_down[i]))
         deeper.add(act(act_fun))
-        # if i>1:
-        #     deeper.add(NONLocalBlock2D(in_channels=num_channels_down[i]))
+        if i>1:
+            deeper.add(NONLocalBlock2D(in_channels=num_channels_down[i]))
         deeper.add(conv(num_channels_down[i], num_channels_down[i], filter_size_down[i], bias=need_bias, pad=pad))
         deeper.add(bn(num_channels_down[i]))
         deeper.add(act(act_fun))

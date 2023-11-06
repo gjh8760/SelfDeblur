@@ -8,11 +8,8 @@ import torch
 import torch.optim
 import warnings
 from utils.common_utils import *
-from copy import deepcopy
 
-from networks.archs import define_network
-
-from metrics.psnr_ssim import calculate_psnr
+from statistic.statistic_levin import comp_upto_shift
 
 
 def imread(path):
@@ -61,7 +58,9 @@ for test_dir in test_dirs:
         k = osp.basename(test_img_path)[10]
         test_img = imread(test_img_path)
         gt_img = gt_imgs[f'im{i}']
-        psnr = calculate_psnr(test_img, gt_img, crop_border=0)
+        
+        # Get psnr and ssim from optimally shifted image
+        psnr, ssim, test_img_shift = comp_upto_shift(test_img, gt_img, maxshift=5)
 
         print(osp.basename(test_img_path), ': %.3f' % psnr)
         mean_dict['total'].append(psnr)
