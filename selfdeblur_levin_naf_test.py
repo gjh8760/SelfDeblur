@@ -45,12 +45,11 @@ for test_dir in test_dirs:
     
     print('test dir:', test_dir)
 
-    mean_dict = {}
-    mean_dict['total'] = []
+    mean_dict = {'total': {'psnr': [], 'ssim': []}}
     for i in range(4):
-        mean_dict[f'im{i+1}'] = []
+        mean_dict[f'im{i+1}'] = {'psnr': [], 'ssim': []}
     for k in range(8):
-        mean_dict[f'kernel{k+1}'] = []
+        mean_dict[f'kernel{k+1}'] = {'psnr': [], 'ssim': []}
 
     test_img_paths = sorted([osp.join(test_dir, d) for d in os.listdir(test_dir) if 'x.png' in d])
     for test_img_path in test_img_paths:
@@ -62,18 +61,28 @@ for test_dir in test_dirs:
         # Get psnr and ssim from optimally shifted image
         psnr, ssim, test_img_shift = comp_upto_shift(test_img, gt_img, maxshift=5)
 
-        print(osp.basename(test_img_path), ': %.3f' % psnr)
-        mean_dict['total'].append(psnr)
-        mean_dict[f'im{i}'].append(psnr)
-        mean_dict[f'kernel{k}'].append(psnr)
+        print(osp.basename(test_img_path), '| PSNR: %.3f | SSIM: %.4f' % (psnr, ssim))
+        mean_dict['total']['psnr'].append(psnr)
+        mean_dict['total']['ssim'].append(ssim)
+        mean_dict[f'im{i}']['psnr'].append(psnr)
+        mean_dict[f'im{i}']['ssim'].append(ssim)
+        mean_dict[f'kernel{k}']['psnr'].append(psnr)
+        mean_dict[f'kernel{k}']['ssim'].append(ssim)
 
     print('-'*50)
 
     for i in range(4):
-        print(f'im{i+1} mean :', '%.3f' % np.mean(mean_dict[f'im{i+1}']))
+        psnr_mean = np.mean(mean_dict[f'im{i+1}']['psnr'])
+        ssim_mean = np.mean(mean_dict[f'im{i+1}']['ssim'])
+        print(f'im{i+1} mean', '| PSNR: %.3f | SSIM: %.4f' % (psnr_mean, ssim_mean))
     for k in range(8):
-        print(f'kernel{k+1} mean :', '%.3f' % np.mean(mean_dict[f'kernel{k+1}']))
-    print('total mean :', '%.3f' % np.mean(mean_dict['total']))
+        psnr_mean = np.mean(mean_dict[f'kernel{k+1}']['psnr'])
+        ssim_mean = np.mean(mean_dict[f'kernel{k+1}']['ssim'])
+        print(f'kernel{k+1} mean', '| PSNR: %.3f | SSIM: %.4f' % (psnr_mean, ssim_mean))
+    
+    total_psnr_mean = np.mean(mean_dict['total']['psnr'])
+    total_ssim_mean = np.mean(mean_dict['total']['ssim'])
+    print('total mean', '| PSNR: %.3f | SSIM: %.4f' % (total_psnr_mean, total_ssim_mean))
     print('='*50)
     
 
