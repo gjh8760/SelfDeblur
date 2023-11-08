@@ -25,10 +25,11 @@ parser.add_argument('--kernel_size', type=int, default=[21, 21], help='size of b
 parser.add_argument('--data_path', type=str, default="datasets/levin/", help='path to blurry image')
 parser.add_argument('--save_path', type=str, default="results/levin/", help='path to save results')
 parser.add_argument('--save_frequency', type=int, default=100, help='lfrequency to save results')
+parser.add_argument('--gpu', type=int, default=0, help='visible gpu')
 opt = parser.parse_args()
 #print(opt)
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '1,2,3'
+os.environ['CUDA_VISIBLE_DEVICES'] = str(opt.gpu)
 
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark =True

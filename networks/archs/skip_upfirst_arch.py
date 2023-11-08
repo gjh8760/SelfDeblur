@@ -113,12 +113,12 @@ class SkipUNetUpFirst(nn.Module):
 
         # down, skip
         in_channels = in_channel
-        first = True
+        count = 0
         for num_channel_down, kernel_size_down, num_channel_skip, kernel_size_skip in zip(num_channels_down, kernel_sizes_down, num_channels_skip, kernel_sizes_skip):
-            self.downs.append(DownSampleBlock(in_channels, num_channel_down, kernel_size_down, non_local_block=not first))
+            self.downs.append(DownSampleBlock(in_channels, num_channel_down, kernel_size_down, non_local_block=(count > 1)))
             in_channels = num_channel_down
             self.skips.append(SkipBlock(in_channels, num_channel_skip, kernel_size_skip))
-            first = False
+            count += 1
         
         # up
         for n in range(len(num_channels_up)):
