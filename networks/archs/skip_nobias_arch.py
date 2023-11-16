@@ -12,7 +12,7 @@ class DownSampleBlock(nn.Module):
         
         self.conv1 = nn.Sequential(
             nn.ReflectionPad2d(int((kernel_size-1) / 2)),
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride=2, padding=0, bias=True)
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride=2, padding=0, bias=False)
         )
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.act1 = nn.LeakyReLU(0.2, True)
@@ -21,7 +21,7 @@ class DownSampleBlock(nn.Module):
 
         self.conv2 = nn.Sequential(
             nn.ReflectionPad2d(int((kernel_size-1) / 2)),
-            nn.Conv2d(out_channels, out_channels, kernel_size, stride=1, padding=0, bias=True)
+            nn.Conv2d(out_channels, out_channels, kernel_size, stride=1, padding=0, bias=False)
         )
         self.bn2 = nn.BatchNorm2d(out_channels)
         self.act2 = nn.LeakyReLU(0.2, True)
@@ -46,7 +46,7 @@ class SkipBlock(nn.Module):
 
         self.conv1 = nn.Sequential(
             nn.ReflectionPad2d(int((kernel_size-1) / 2)),
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride=1, padding=0, bias=True)
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride=1, padding=0, bias=False)
         )
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.act1 = nn.LeakyReLU(0.2, True)
@@ -62,24 +62,21 @@ class UpSampleBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size):
         super().__init__()
 
-        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear')
+        self.bn0 = nn.BatchNorm2d(in_channels)
 
         self.conv1 = nn.Sequential(
             nn.ReflectionPad2d(int((kernel_size-1) / 2)),
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride=1, padding=0, bias=True)
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride=1, padding=0, bias=False)
         )
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.act1 = nn.LeakyReLU(0.2, True)
 
-        self.conv2 = nn.Sequential(
-            nn.ReflectionPad2d(int((kernel_size-1) / 2)),
-            nn.Conv2d(out_channels, out_channels, kernel_size, stride=1, padding=0, bias=True)
-        )
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels)
         self.act2 = nn.LeakyReLU(0.2, True)
 
     def forward(self, inp):
-        x = self.upsample(inp)
+        x = self.bn0(inp)
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -92,7 +89,7 @@ class UpSampleBlock(nn.Module):
         return x
 
 
-class SkipUNet_NoBNInUp_3x3(nn.Module):
+class SkipUNetWithoutBias(nn.Module):
 
     def __init__(
             self, in_channel=8, out_channel=1, 
@@ -105,6 +102,7 @@ class SkipUNet_NoBNInUp_3x3(nn.Module):
         self.ups = nn.ModuleList()
         self.skips = nn.ModuleList()
 
+        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear')
         self.ending = nn.Sequential(
             nn.Conv2d(num_channels_up[0], out_channel, kernel_size=1, stride=1, padding=0, bias=True),
             nn.Sigmoid()
@@ -112,46 +110,81 @@ class SkipUNet_NoBNInUp_3x3(nn.Module):
 
         # down, skip
         in_channels = in_channel
-        first = True
-        for num_channel_down, kernel_size_down, num_channel_skip, kernel_size_skip in zip(num_channels_down, kernel_sizes_down, num_channels_skip, kernel_sizes_skip):
-            self.downs.append(DownSampleBlock(in_channels, num_channel_down, kernel_size_down, non_local_block=not first))
+        count = 0
+        for num_channel_down, \
+            kernel_size_down, \
+            num_channel_skip, \
+            kernel_size_skip in zip(num_channels_down, \
+                                    kernel_sizes_down, \
+                                    num_channels_skip, \
+                                    kernel_sizes_skip):
+            self.downs.append(DownSampleBlock(in_channels, num_channel_down, kernel_size_down, non_local_block=(count > 1)))
+            self.skips.append(SkipBlock(in_channels, num_channel_skip, kernel_size_skip) if num_channel_skip != 0 else nn.Identity())
             in_channels = num_channel_down
-            self.skips.append(SkipBlock(in_channels, num_channel_skip, kernel_size_skip))
-            first = False
+            count += 1
         
         # up
         for n in range(len(num_channels_up)):
+            num_channel_skip = num_channels_skip[-n-1]
             num_channel_up = num_channels_up[-n-1]
             kernel_size_up = kernel_sizes_up[-n-1]
-            num_channel_skip = 0
-            if n == 0:
-                self.ups.append(UpSampleBlock(num_channels_skip[-1], num_channel_up, kernel_size_up))
+            if num_channel_skip != 0:
+                if n == 0:
+                    self.ups.append(
+                        nn.Sequential(
+                            UpSampleBlock(num_channels_down[-1] + num_channels_skip[-1], num_channel_up, kernel_size_up),
+                            nn.Upsample(scale_factor=2, mode='bilinear')
+                        )
+                    )
+                elif n != len(num_channels_up) - 1:
+                    self.ups.append(
+                        nn.Sequential(
+                            UpSampleBlock(num_channels_up[-n] + num_channels_skip[-n-1], num_channel_up, kernel_size_up),
+                            nn.Upsample(scale_factor=2, mode='bilinear')
+                        )
+                    )
+                else:
+                    self.ups.append(
+                        UpSampleBlock(num_channels_up[-n] + num_channels_skip[-n-1], num_channel_up, kernel_size_up)
+                    )
             else:
-                num_channel_skip = num_channels_skip[-n-1]
-                self.ups.append(UpSampleBlock(num_channel_up + num_channel_skip, num_channel_up, kernel_size_up))
+                if n == 0:
+                    self.ups.append(
+                        nn.Sequential(
+                            UpSampleBlock(num_channels_down[-1] + num_channels_down[-2], num_channel_up, kernel_size_up),
+                            nn.Upsample(scale_factor=2, mode='bilinear')
+                        )
+                    )
+                elif n != len(num_channels_up) - 1:
+                    self.ups.append(
+                        nn.Sequential(
+                            UpSampleBlock(num_channels_up[-n] + num_channels_down[-n-2], num_channel_up, kernel_size_up),
+                            nn.Upsample(scale_factor=2, mode='bilinear')
+                        )
+                    )
+                else:
+                    self.ups.append(
+                        UpSampleBlock(num_channels_up[-n] + in_channel, num_channel_up, kernel_size_up)
+                    )
 
     def forward(self, inp):
         
         x = inp
         _, _, H, W = x.shape
 
-        after_downs = []
+        skips = []
+        skips.append(self.skips[0](x))
 
-        for down in self.downs:
+        for n, down in enumerate(self.downs):
             x = down(x)
-            after_downs.append(x)
+            if n != len(self.downs) - 1:
+                skips.append(self.skips[n+1](x))
         
-        for n in range(len(self.ups)):
-            up = self.ups[n]
-            skip = self.skips[-n-1]
-            after_down = after_downs[-n-1]
-            
+        for n, (up, skip) in enumerate(zip(self.ups, skips[::-1])):
             if n == 0:
-                x = skip(x)
-                x = up(x)
-            else:
-                x = self._concat((x, skip(after_down)), 1)
-                x = up(x)
+                x = self.upsample(x)
+            x = self._concat((x, skip), dim=1)
+            x = up(x)
             
         x = self.ending(x)
         return x[:, :, :H, :W]

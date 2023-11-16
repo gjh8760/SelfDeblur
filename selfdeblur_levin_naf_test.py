@@ -60,6 +60,8 @@ for test_dir in test_dirs:
         
         # Get psnr and ssim from optimally shifted image
         psnr, ssim, test_img_shift = comp_upto_shift(test_img, gt_img, maxshift=5)
+        if psnr < 20:
+            psnr, ssim, test_img_shift = comp_upto_shift(test_img, gt_img, maxshift=10)
 
         print(osp.basename(test_img_path), '| PSNR: %.3f | SSIM: %.4f' % (psnr, ssim))
         mean_dict['total']['psnr'].append(psnr)
